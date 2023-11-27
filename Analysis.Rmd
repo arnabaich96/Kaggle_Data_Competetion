@@ -3,14 +3,17 @@ title: "kaggle"
 author: "Arnab Aich"
 date: "`r Sys.Date()`"
 output: pdf_document
+editor_options: 
+  chunk_output_type: inline
 ---
 * Loading required Libraries 
 ```{r message=FALSE, warning=FALSE,echo=TRUE}
-packages = c("parallel","doParallel","doSNOW","readr","dplyr","caret","pROC","ggplot2","gridExtra","mice","xgboost","gbm","e1071")
+packages = c("parallel","doParallel","doSNOW","readr","dplyr","caret","pROC","ggplot2","gridExtra","mice","xgboost","gbm","e1071","keras","tensorflow","reticulate")
 invisible(xfun::pkg_attach(packages))
 ```
+
 # data
-```{r}
+```{r message=FALSE, warning=FALSE, include=FALSE}
 train_data <- read_csv("training_data.csv",show_col_types = FALSE)
 dim(train_data)
 train_Y = train_data$SalePrice
@@ -62,21 +65,52 @@ data_train = data.frame(y = train_Y,x = X_train)
 ```{r message=FALSE, warning=FALSE}
 dmatrix = xgb.DMatrix(data = as.matrix(X_train),label = train_Y)
 model1 = xgboost(data = dmatrix,nrounds = 200,eta = 1,max_depth = 25)
-```
-```{r}
 fitted_saleprice1=predict(model1,as.matrix(X_test))
-pred1 = cbind(test_X$RecordID,fitted_saleprice)
 ```
+
 # Support Vector Regression
-```{r}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 model2 = svm(y~.,data = data_train)
 fitted_saleprice2=predict(model2,as.matrix(X_test))
 ```
+
 # Neural Network
 ```{r}
-model3 = svm(y~.,data = data_train)
+num_cores <- detectCores() - 2 
+# Build and compile your model as before
+model3 <- keras_model_sequential()
+
+model3 %>%
+  layer_dense(units = ncol(X_train), activation = 'linear', input_shape = ncol(X_train)) %>%
+  layer_dense(units = 40, activation = 'relu') %>%
+  layer_dense(units = 20, activation = 'tanh') %>%
+  # layer_dense(units = floor(ncol(X_train)*0.25), activation = 'relu') %>%
+  # layer_dense(units = 5, activation = 'relu') %>%
+  layer_dense(units = 1, activation = 'linear')
+
+summary(model3)
+model3 %>% compile(
+  loss = "mean_squared_error",
+   optimizer = optimizer_adam(learning_rate = learning_rate_schedule_exponential_decay(initial_learning_rate = 3, decay_steps = 100,decay_rate =0.05))
+)
+
+
+# Train the model with parallel processing
+history <- model3 %>% fit(
+  as.matrix(X_train), train_Y,
+  epochs = 100,
+  batch_size = ncol(X_train)*0.05
+  # validation_data = list(x_test, y_test),
+    , workers = num_cores # Number of workers for data loading
+  , use_multiprocessing = TRUE  # Enable multiprocessing
+)
+
 fitted_saleprice3=predict(model3,as.matrix(X_test))
 ```
+```{r}
+cbind(id = test_X$RecordID,estimate_1 =fitted_saleprice1,estimate_2 =fitted_saleprice2,estimate_3=fitted_saleprice3)
+```
+
 
 
 
