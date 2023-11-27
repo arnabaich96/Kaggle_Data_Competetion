@@ -5,3 +5,5 @@ destination <- "destination_folder/your_dataset.csv"  # Specify the destination 
 # Download the file
 download.file(url, destfile = destination, method = "curl")  # Use "curl" or "wget" as the method depending on your system
 
+library(servr)
+servr::httd()
